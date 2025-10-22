@@ -9,6 +9,7 @@ from util import wait_if_harvestable
 from util import normalize_range
 from util import till_soil
 from util import water_tile
+from util import move_to
 
 plant_bush_lambda = get_plant_entity_lambda(Entities.Bush)
 plant_tree_lambda = get_plant_entity_lambda(Entities.Tree)
@@ -105,3 +106,174 @@ def plan_area(plant, matrix, i_range=None, j_range=None):
 			matrix[i][j] = plan_tile_execution_jobs(plant, i, j)
 	return matrix
 
+
+def farm_sunflower(no_of_drones):
+	def farm_sf():
+		while True:
+			has_moved = False
+			while get_pos_y() > 0 or not has_moved:
+				wait_if_harvestable()
+				harvest()
+				till_soil()
+				water_tile()
+				plant(Entities.Sunflower)
+				move(North)
+
+	for i in range(no_of_drones):
+		spawn_drone(farm_sf)
+		move(East)
+
+	farm_sf()
+
+
+def farm_gold():
+	hug_right_list = {
+		North: [East, North, West, South],
+		East: [South, East, North, West],
+		South: [West, South, East, North],
+		West: [North, West, South, East],
+	}
+
+	hug_left_list = {
+		North: [West, North, East, South],
+		East: [North, East, South, West],
+		South: [East, South, West, North],
+		West: [South, West, North, East],
+	}
+
+	def hunt_for_treasure(hug_side_list):
+		last_direction = North
+		while get_entity_type() == Entities.Hedge:
+			for dir in hug_side_list[last_direction]:
+				if can_move(dir):
+					move(dir)
+					last_direction = dir
+					break
+		harvest()
+
+	def hug_right_lambda():
+		return hunt_for_treasure(hug_right_list)
+
+	while True:
+		clear()
+		plant(Entities.Bush)
+		substance = get_world_size() * 2 ** (num_unlocked(Unlocks.Mazes) - 1)
+		use_item(Items.Weird_Substance, substance)
+		spawn_drone(hug_right_lambda)
+		hunt_for_treasure(hug_left_list)
+
+
+def farm_naive_polyculture():
+	while True:
+		water_tile()
+		entity, (x, y) = get_companion()
+		move_to(x, y)
+		current_entity = get_entity_type()
+		current_ground = get_ground_type()
+		if entity == current_entity:
+			fertilize_if_has_to_wait()
+			harvest()
+			plant(entity)
+			continue
+
+		if entity == Entities.Grass:
+			if current_ground == Grounds.Soil:
+				fertilize_if_has_to_wait()
+				harvest()
+				till()
+				continue
+
+			fertilize_if_has_to_wait()
+			harvest()
+			continue
+
+		if entity in (Entities.Bush, Entities.Tree):
+			if current_ground == Grounds.Soil:
+				fertilize_if_has_to_wait()
+				harvest()
+				till()
+				plant(entity)
+				continue
+
+			fertilize_if_has_to_wait()
+			harvest()
+			plant(entity)
+			continue
+
+		if current_ground == Grounds.Soil:
+			fertilize_if_has_to_wait()
+			harvest()
+			plant(entity)
+			continue
+
+		fertilize_if_has_to_wait()
+		harvest()
+		till()
+		plant(entity)
+
+
+def farm_cacti(no_of_drones):
+	def plant_cacti():
+		for i in range(no_of_drones):
+			till_soil()
+			plant(Entities.Cactus)
+			move(North)
+
+	def sort_column():
+		starting_pos = get_pos_x(), get_pos_y()
+		swaped = True
+		while swaped:
+			swaped = False
+			for i in range(no_of_drones - 1):
+				current_tile_cactus_size = measure()
+				next_tile_cactus_size = measure(North)
+				if current_tile_cactus_size > next_tile_cactus_size:
+					swaped = True
+					swap(North)
+				move(North)
+			move_to(starting_pos[0], starting_pos[1])
+
+	def sort_row():
+		starting_pos = get_pos_x(), get_pos_y()
+		swaped = True
+		while swaped:
+			swaped = False
+			for i in range(no_of_drones - 1):
+				current_tile_cactus_size = measure()
+				next_tile_cactus_size = measure(East)
+				if current_tile_cactus_size > next_tile_cactus_size:
+					swaped = True
+					swap(East)
+				move(East)
+			move_to(starting_pos[0], starting_pos[1])
+
+	while True:
+		drones = []
+		for _ in range(no_of_drones - 1):
+			drones.append(spawn_drone(plant_cacti))
+			move(East)
+		plant_cacti()
+		for drone in drones:
+			wait_for(drone)
+
+		move_to(0, 0)
+
+		drones = []
+		for _ in range(no_of_drones - 1):
+			drones.append(spawn_drone(sort_column))
+			move(East)
+		sort_column()
+		for drone in drones:
+			wait_for(drone)
+
+		move_to(0, 0)
+
+		for _ in range(no_of_drones - 1):
+			drones.append(spawn_drone(sort_row))
+			move(North)
+		sort_row()
+		for drone in drones:
+			wait_for(drone)
+
+		move_to(0, 0)
+		harvest()
