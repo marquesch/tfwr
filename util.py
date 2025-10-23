@@ -120,9 +120,9 @@ def fertilize_if_has_to_wait():
 
 
 def wait_if_harvestable():
-	if not is_harvestable():
-		return
-	wait_harvestable()
+	while not can_harvest():
+		if not is_harvestable():
+			return
 
 
 def normalize_range(current_range, max_length):
