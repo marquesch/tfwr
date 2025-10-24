@@ -142,26 +142,48 @@ def farm_gold():
 		West: [South, West, North, East],
 	}
 
-	def hunt_for_treasure(hug_side_list):
+	def hunt_for_treasure(hug_side_list, main):
 		last_direction = North
-		while get_entity_type() == Entities.Hedge:
-			for dir in hug_side_list[last_direction]:
-				if can_move(dir):
-					move(dir)
-					last_direction = dir
-					break
-		harvest()
+		while True:
+			while get_entity_type() == Entities.Hedge:
+				for dir in hug_side_list[last_direction]:
+					if can_move(dir):
+						move(dir)
+						last_direction = dir
+						break
+			harvest()
+			if main:
+				plant(Entities.Bush)
+				substance = get_world_size() * 2 ** (num_unlocked(Unlocks.Mazes) - 1)
+				use_item(Items.Weird_Substance, substance)
 
 	def hug_right_lambda():
-		return hunt_for_treasure(hug_right_list)
+		while get_entity_type() not in (Entities.Hedge, Entities.Treasure):
+			pass
+		return hunt_for_treasure(hug_right_list, False)
+
+	def hug_left_lambda():
+		while get_entity_type() not in (Entities.Hedge, Entities.Treasure):
+			pass
+		return hunt_for_treasure(hug_left_list, False)
+
+	drones = []
+	side_coverage_per_drone = 8
+	for i in range(get_world_size() / side_coverage_per_drone):
+		for j in range(get_world_size() / side_coverage_per_drone):
+			pos_x = ((i + 1) * side_coverage_per_drone) - side_coverage_per_drone / 2
+			pos_y = ((j + 1) * side_coverage_per_drone) - side_coverage_per_drone / 2
+			move_to(pos_x, pos_y)
+			drones.append(spawn_drone(hug_right_lambda))
+			if len(drones) >= max_drones():
+				continue
+			drones.append(spawn_drone(hug_left_lambda))
 
 	while True:
-		clear()
 		plant(Entities.Bush)
 		substance = get_world_size() * 2 ** (num_unlocked(Unlocks.Mazes) - 1)
 		use_item(Items.Weird_Substance, substance)
-		spawn_drone(hug_right_lambda)
-		hunt_for_treasure(hug_left_list)
+		hunt_for_treasure(hug_left_list, True)
 
 
 def farm_naive_polyculture():
@@ -221,40 +243,23 @@ def gather_all(positions):
 
 
 def farm_polyculture():
-	polyculture_matrix = []
-	polyculture_positions = [(0, 0)]
-	polyculture_matrix.append(polyculture_positions)
+	def null_fun():
+		return
 
-	drones = []
+	def harvest_after_last_drone_lambda(drone_handle):
+		def harvest_after_last_drone():
+			do_a_flip()
+			wait_for(drone_handle)
+			fertilize_if_has_to_wait()
+			harvest()
+
+		return harvest_after_last_drone
+
+	drone_handle = spawn_drone(null_fun)
 	while True:
-		drones_tbr = []
-		for drone in drones:
-			if has_finished(drone):
-				result = wait_for(drone)
-				polyculture_matrix.remove(result)
-				drones_tbr.append(drone)
-
-		for drone in drones_tbr:
-			drones.remove(drone)
-
-		polyculture_positions = polyculture_matrix[-1]
-		water_tile()
+		drone_lambda = harvest_after_last_drone_lambda(drone_handle)
+		drone_handle = spawn_drone(drone_lambda)
 		entity, (x, y) = get_companion()
-		for polyculture_positions in polyculture_matrix:
-			if (x, y) in polyculture_positions:
-
-				def gather_all_lambda():
-					gather_all(polyculture_positions)
-					return polyculture_positions
-
-				drones.append(spawn_drone(gather_all_lambda))
-				pos_x, pos_y = get_pos_x(), get_pos_y()
-				while (pos_x, pos_y) in polyculture_positions:
-					move(East)
-					pos_x = pos_x + 1
-
-				polyculture_matrix.append([(pos_x, pos_y)])
-				continue
 		move_to(x, y)
 		current_entity = get_entity_type()
 		current_ground = get_ground_type()
@@ -445,3 +450,39 @@ def farm_carrot(no_of_drones):
 			spawn_drone(iter_col)
 			move(East)
 		iter_col()
+
+
+def farm_bones(size):
+	def harvest_apple(col):
+		if get_entity_type() == Entities.Apple:
+			harvest()
+			col = col + 1
+			quick_print(col)
+			if col >= (size * size) - 2:
+				change_hat(Hats.Brown_Hat)
+				change_hat(Hats.Dinosaur_Hat)
+				time_taken = get_time()
+				print(time_taken)
+				col = 0
+		return col
+
+	op_of = {North: South, South: North}
+	set_world_size(size)
+	change_hat(Hats.Dinosaur_Hat)
+	dir = South
+	col = 0
+	while True:
+		move(East)
+		col = harvest_apple(col)
+		for _ in range(size - 2):
+			dir = op_of[dir]
+			for _ in range(size - 2):
+				move(dir)
+				col = harvest_apple(col)
+			move(East)
+			col = harvest_apple(col)
+
+		for dir in (North, West, South):
+			for _ in range(size - 1):
+				move(dir)
+				col = harvest_apple(col)

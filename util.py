@@ -117,6 +117,7 @@ def fertilize_if_has_to_wait():
 	if is_harvestable():
 		while not can_harvest():
 			use_item(Items.Fertilizer)
+		use_item(Items.Weird_Substance)
 
 
 def wait_if_harvestable():
